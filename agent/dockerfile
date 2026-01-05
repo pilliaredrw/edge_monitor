@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+# 基础镜像。指定使用 Python 3.11 的精简版
+WORKDIR /app
+COPY ./requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY ./ .
+
+# 跑服务相关
+RUN useradd -m monitor_user
+USER monitor_user
+EXPOSE 8000
+CMD ["uvicorn", "monitor:app", "--host", "0.0.0.0", "--port", "8000"]
