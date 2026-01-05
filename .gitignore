@@ -15,7 +15,6 @@ logs/
 .env.local
 .env.*.local
 config.json
-config.yaml
 # OS
 .DS_Store
 Thumbs.db
