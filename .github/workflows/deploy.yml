@@ -1,0 +1,61 @@
+name: Edge Monitor Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # 1. 编译前端 (在 GitHub 虚拟机里跑)
+      - name: Build Frontend
+        run: |
+          cd dash/frontend
+          npm install
+          npm run build
+
+      # 2. 将编译好的静态文件 (dist) 传送到阿里云
+      - name: Deploy Frontend to Nginx
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "dash/frontend/dist/*"
+          target: "/var/www/edge_monitor"
+          strip_components: 3 # 关键：去掉 dash/frontend/dist/ 这三层路径
+
+      # 3. 将后端源码传送到阿里云
+      - name: Deploy Backend to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "dash/backend/*"
+          target: "/opt/edge_manager"
+          strip_components: 2 # 关键：去掉 dash/backend/ 这两层路径
+
+      # 4. 远程执行 Docker 构建与重启
+      - name: SSH Remote Command
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/edge_manager
+            # 构建后端镜像
+            docker build -t edge-aggregator .
+            # 杀掉并移除旧容器
+            docker stop edge-aggregator-run || true
+            docker rm edge-aggregator-run || true
+            # 启动新容器，注入 Secret 中的 Token，并挂载宿主机的配置文件
+            docker run -d --name edge-aggregator-run \
+              -p 9000:9000 \
+              -e AGENT_TOKEN="${{ secrets.AGENT_TOKEN }}" \
+              -v /opt/edge_manager/config.yaml:/app/config.yaml \
+              edge-aggregator
