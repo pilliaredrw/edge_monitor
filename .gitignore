@@ -21,4 +21,8 @@ config.yaml
 Thumbs.db
 # IDE
 .vscode/
+# vue
+dist/
 
+# sono
+NOTE.md
